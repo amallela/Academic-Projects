@@ -1,0 +1,171 @@
+#Final Project
+
+#Algorithm
+
+Read Categories from the given URL
+Generate CSV file with categories
+Read input from user , which company user wants to check the stocks
+Search for the company in second URL
+Read all the required values from the link
+Display them to the user and store in CSV
+
+#Expected Results
+Which stock are you interested in:
+
+Most Actives:
+GE General Electric Co
+BAC Bank of America Corp
+AMD Advanced Micro Devices Inc
+F Ford Motor Co
+FCX Freeport-McMoRan Inc
+AAPL Apple Inc
+INTC Intel Corp
+BMY Bristol-Myers Squibb Co
+WFC Wells Fargo & Co
+MSFT Microsoft Corp
+
+Gainers:
+CCI Crown Castle International Corp
+DXC DXC Technology Co
+TTWO Take-Two Interactive Software Inc
+SLG SL Green Realty Corp
+NEM Newmont Goldcorp Corp
+PEAK Healthpeak Properties Inc
+EXR Extra Space Storage Inc
+PSA Public Storage
+NRG NRG Energy Inc
+VNO Vornado Realty Trust
+
+Losers:
+APA Apache Corp
+UNM Unum Group
+XEC Cimarex Energy Co
+FCX Freeport-McMoRan Inc
+LB L Brands Inc
+CPRI Capri Holdings Ltd
+FDX FedEx Corp
+LNC Lincoln National Corp
+TPR Tapestry Inc
+NOV National Oilwell Varco Inc
+
+User inputs:FDX
+
+The data for FDX FedEx Corp is the following:
+
+FDX FedEx Corp
+OPEN: 154.22
+PREV CLOSE: 158.03
+VOLUME: 3,643,288
+MARKET CAP: 39.434B
+
+~~~~~~~~~~~~~~~~~~~~~~
+
+from bs4 import BeautifulSoup
+import pandas as pd
+import requests
+import csv
+from collections import defaultdict
+categories = list()
+new_data_dict = {}
+#Parse html source using BeatifulSource and return categories
+def getStockCategories():
+    #categories = list()
+    soup = BeautifulSoup(source, 'lxml')
+    hot_stocks = soup.find('div',{'id':'wsod_hotStocks'}) 
+    for category in hot_stocks.find_all('h3'):
+        categories.append(category.text)
+    
+
+# read all tables info from html source using panda and write extracted details into CSV file
+def writeDataToCSVFile():
+    dfs = pd.read_html(source, header=0)
+    for idx, df in enumerate(dfs):
+        splitStr = []
+        for company_detail in df.Company:
+            splitStr = company_detail.split(' ', 1)
+            csv_writer.writerow([categories[idx], splitStr[0], splitStr[1]])
+    csv_file.close()
+
+#group stocks based on category and create data dictionary
+def createCategoriesDictionary():
+    #new_data_dict = {}
+    with open("stocks.csv", 'r') as data_file:
+        data = csv.DictReader(data_file, delimiter=",")
+        for row in data:
+            item = new_data_dict.get(row['category'], dict())
+            item[row['ticker_symbol']] = row['company_name']
+            new_data_dict[row['category']] = item
+
+#Prints all categories top 10 company details
+def printAllCompaniesInfo():
+    print('Which stock are you interested in:')
+    print()
+    for key, value in new_data_dict.items(): 
+        print(key + ':') 
+        for(key, value) in value.items():
+            print(key, value)
+        print()
+
+#Display and persist user requested company stock info
+def persistUserReqCompanyStockInfo():
+    #Read required data from parsed beatifulsoup
+    try:
+        quote_summary = quote_soup.find('div',{'id':'quote-summary'})
+        open_price = quote_summary.find('td',{'data-test':'OPEN-value'}).text
+        prev_close_price = quote_summary.find('td',{'data-test':'PREV_CLOSE-value'}).text
+        volume = quote_summary.find('td',{'data-test':'TD_VOLUME-value'}).text
+        market_cap = quote_summary.find('td',{'data-test':'MARKET_CAP-value'}).text
+
+        #Read CSV, get company details
+        stock_df = pd.read_csv('stocks.csv')
+        company_temp = stock_df.loc[stock_df['ticker_symbol']==company_input, ['company_name']]
+        company_dtls = company_input+' '+company_temp.iloc[0].to_string(index=False,header=None).strip()
+
+        #Update CSV with required info
+        stock_df.loc[stock_df['ticker_symbol']==company_input, 'open_price'] = open_price
+        stock_df.loc[stock_df['ticker_symbol']==company_input, 'prev_close_price'] = prev_close_price
+        stock_df.loc[stock_df['ticker_symbol']==company_input, 'volume'] = str(volume)
+        stock_df.loc[stock_df['ticker_symbol']==company_input, 'market_cap'] = market_cap
+        stock_df.to_csv('stocks.csv', index=False)
+
+        #Print the info
+        print()
+        print('The data for {} is the following:'.format(company_dtls))
+        print()
+        print(company_dtls)
+        print('OPEN: {}'.format(open_price))
+        print('PREV CLOSE: {}'.format(prev_close_price))
+        print('VOLUME: {}'.format(volume))
+        print('MARKET CAP: {}'.format(market_cap))
+    except Exception as e:
+        print('Provided wrong input value')
+
+        
+#Initialize CSV file
+csv_file = open('stocks.csv', 'w')
+csv_writer = csv.writer(csv_file)
+csv_writer.writerow(['category','ticker_symbol', 'company_name','open_price','prev_close_price','volume','market_cap'])
+
+#Get source html content
+source = requests.get('https://money.cnn.com/data/hotstocks').text
+#read top 3 categories
+getStockCategories()
+#read all tables from source and write into csv file
+#readSourceTables()
+writeDataToCSVFile()
+#Create data dictory
+createCategoriesDictionary()
+#Display top 10 company details
+printAllCompaniesInfo()
+
+#Take input from User
+company_input = input('User inputs:').upper()
+
+#Format link
+y_fn_link = f'https://finance.yahoo.com/quote/{company_input}?p={company_input}&.tsrc=fin-srch-v1'
+quote_source = requests.get(y_fn_link).text
+quote_soup = BeautifulSoup(quote_source, 'lxml')
+
+#Display and persist user requested info
+persistUserReqCompanyStockInfo()
+
